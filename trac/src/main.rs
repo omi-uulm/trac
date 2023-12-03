@@ -1,7 +1,9 @@
-use aya::programs::TracePoint;
+use aya::programs::perf_event::{perf_hw_id, PerfEventScope};
+use aya::programs::{PerfEvent, PerfTypeId, SamplePolicy, TracePoint};
+use aya::util::online_cpus;
 use aya::{include_bytes_aligned, Bpf};
 use aya_log::BpfLogger;
-use log::{info, warn, debug};
+use log::{debug, info, warn};
 use tokio::signal;
 
 #[tokio::main]
@@ -35,10 +37,20 @@ async fn main() -> Result<(), anyhow::Error> {
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {}", e);
     }
-    let program: &mut TracePoint = bpf.program_mut("trac").unwrap().try_into()?;
-    program.load()?;
-    program.attach("sched", "sched_switch")?;
+    // let program: &mut TracePoint = bpf.program_mut("trac").unwrap().try_into()?;
+    // program.load()?;
+    // program.attach("sched", "sched_switch")?;
 
+    let program_perf: &mut PerfEvent = bpf.program_mut("observe_cpu_clock").unwrap().try_into()?;
+    program_perf.load()?;
+    for cpu in online_cpus()? {
+        program_perf.attach(
+            PerfTypeId::Hardware,
+            perf_hw_id::PERF_COUNT_HW_CPU_CYCLES as u64,
+            PerfEventScope::AllProcessesOneCpu { cpu },
+            SamplePolicy::Frequency(10000),
+        )?;
+    }
     info!("Waiting for Ctrl-C...");
     signal::ctrl_c().await?;
     info!("Exiting...");

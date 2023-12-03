@@ -3,13 +3,14 @@
 
 use aya_bpf::{
     macros::{tracepoint, perf_event},
-    programs::{TracePointContext, PerfEventContext},
-    BpfContext
+    programs::{TracePointContext, PerfEventContext, perf_event},
+    BpfContext, helpers::bpf_perf_event_read
 };
 use aya_log_ebpf::info;
 
 #[perf_event]
 pub fn observe_cpu_clock(ctx: PerfEventContext) -> u32 {
+    // bpf_perf_event_read(&ctx, flags)
     match try_observe_cpu_clock(ctx) {
         Ok(ret) => ret,
         Err(ret) => ret,

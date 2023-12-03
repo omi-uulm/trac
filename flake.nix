@@ -21,6 +21,8 @@
         rustup
         bpf-linker
         cargo-generate
+        bpftool
+        rust-bindgen
       ];
     };
   };

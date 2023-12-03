@@ -8,7 +8,7 @@ use aya_bpf::{
     programs::{perf_event, PerfEventContext, TracePointContext},
     BpfContext,
 };
-use aya_log_ebpf::{info,log};
+use aya_log_ebpf::{info};
 
 #[perf_event]
 pub fn observe_cpu_clock(ctx: PerfEventContext) -> u32 {

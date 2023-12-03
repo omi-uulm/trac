@@ -24,3 +24,7 @@ cargo build
 ```bash
 RUST_LOG=info cargo xtask run
 ```
+
+## Resources
+
+* example code: https://github.com/aya-rs/aya-template

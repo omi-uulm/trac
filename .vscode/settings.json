@@ -1,3 +1,5 @@
 {
-  "rust-analyzer.linkedProjects": ["Cargo.toml", "trac-ebpf/Cargo.toml"]
+  "rust-analyzer.linkedProjects": ["Cargo.toml", "trac-ebpf/Cargo.toml"],
+  "rust-analyzer.cargo.target": "bpfel-unknown-none",
+  "rust-analyzer.checkOnSave.allTargets": false,
 }

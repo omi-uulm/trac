@@ -8,6 +8,7 @@ use libc::__c_anonymous_ptrace_syscall_info_entry;
 use log::{debug, info, warn};
 use tokio::signal;
 use std::{
+    env::args,
     borrow::BorrowMut,
     time::Instant,
     fs::read_to_string,
@@ -16,6 +17,7 @@ use scanf::sscanf;
 
 static START_TIME_KEY: u64 = 0;
 static SAMEPLE_RATE_KEY: u64 = 1;
+static PID_KEY: u64 = 2;
 
 pub fn boot_time_get_ns() -> Result<u64, u64> {
     let result = match read_to_string("/proc/uptime") {
@@ -40,6 +42,12 @@ pub fn boot_time_get_ns() -> Result<u64, u64> {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    // TODO: temporary, replace by a config file later
+    let args: Vec<String> = args().collect();
+    let pid = &args[1];
+    let pid: u64 = pid.parse().unwrap();
+
+
     env_logger::init();
 
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
@@ -89,7 +97,9 @@ async fn main() -> Result<(), anyhow::Error> {
     match boot_time_get_ns() {
         Ok(boot_time) => {
             settings_map.insert(START_TIME_KEY, boot_time, 0);
+            // TODO: replace 500 by sample rate
             settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
+            settings_map.insert(PID_KEY, pid, 0);
         },
         Err(_) => {
             panic!("failed to get boot time nanoseconds");

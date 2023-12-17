@@ -5,7 +5,7 @@ mod task;
 mod perf_event;
 
 use aya_bpf::{
-    helpers::{ bpf_get_smp_processor_id, bpf_perf_prog_read_value, bpf_get_current_comm, bpf_get_current_task_btf, bpf_ktime_get_tai_ns, bpf_ktime_get_boot_ns },
+    helpers::{bpf_perf_prog_read_value, bpf_get_current_task_btf, bpf_ktime_get_boot_ns },
     macros::{ perf_event, tracepoint, map },
     bindings::{ bpf_perf_event_value, bpf_perf_event_data },
     programs::{ PerfEventContext, TracePointContext },
@@ -13,10 +13,7 @@ use aya_bpf::{
     maps::{ PerCpuHashMap, Array, HashMap },
 };
 use aya_log_ebpf::info;
-use core::{
-    str::from_utf8_unchecked,
-    ptr::addr_of_mut,
-};
+use core::ptr::addr_of_mut;
 use task::task_struct;
 use perf_event::bpf_perf_event_data as native_bpf_perf_event_data;
 
@@ -27,10 +24,11 @@ pub struct ProcessPerfCounterEntry {
 
 static START_TIME_KEY: u64 = 0;
 static SAMEPLE_RATE_KEY: u64 = 1;
+static PID_KEY: u64 = 2;
 static MS_IN_NS: u64 = 1000000;
 
 #[map]
-static SETTINGS_MAP: HashMap<u64, u64> = HashMap::with_max_entries(2, 0);
+static SETTINGS_MAP: HashMap<u64, u64> = HashMap::with_max_entries(3, 0);
 
 #[map]
 static PROC_MAP: PerCpuHashMap<u64, ProcessPerfCounterEntry> = PerCpuHashMap::with_max_entries(1024, 0);
@@ -46,24 +44,23 @@ pub fn observe_cpu_clock(ctx: PerfEventContext) -> u32 {
     }
 }
 
+fn get_sample_rate() -> u64 {
+    return match unsafe { SETTINGS_MAP.get(&SAMEPLE_RATE_KEY) } {
+        None => 500,
+        Some(i) => *i,
+    }
+}
+
 fn get_current_bucket() -> u32 {
-    let mut current_bucket = 0;
     let timestamp = unsafe { bpf_ktime_get_boot_ns() };
 
     match unsafe { SETTINGS_MAP.get(&START_TIME_KEY) } {
-        None => {
-            match SETTINGS_MAP.insert(&START_TIME_KEY, &timestamp, 0) {
-                Ok(_) => {},
-                Err(_) => { return current_bucket }
-            }
-        },
+        None => 0,
         Some(i) => {
             // TODO: replace 500 by sample rate
-            current_bucket = ((timestamp - i) / MS_IN_NS / 500) as u32;
+            ((timestamp - i) / MS_IN_NS / get_sample_rate()) as u32
         }
     }
-
-    current_bucket
 }
 
 fn try_observe_cpu_clock(ctx: PerfEventContext) -> Result<u32, u32> {
@@ -75,14 +72,19 @@ fn try_observe_cpu_clock(ctx: PerfEventContext) -> Result<u32, u32> {
     let mut value = bpf_perf_event_value { counter: 0, enabled: 0, running: 0 };
     let value_ptr = addr_of_mut!(value);
 
-    unsafe { bpf_perf_prog_read_value(read_value_ctx as *mut bpf_perf_event_data, value_ptr, core::mem::size_of::<bpf_perf_event_value>() as u32); }
+    unsafe { bpf_perf_prog_read_value(read_value_ctx as *mut bpf_perf_event_data, value_ptr, core::mem::size_of::<bpf_perf_event_value>() as u32); };
+
+    let watch_pid: u64 = match unsafe { SETTINGS_MAP.get(&PID_KEY) } {
+        None => 0,
+        Some(p) => *p,
+    };
 
     for _ in 1..8 {
         let cur_pid = unsafe { (*task).pid } as u64;
         match cur_pid {
             0 => break,
             1 => break,
-            10202 => {
+            w if w == watch_pid => {
                 let counter = value.counter;
                 let mut proc_entry = ProcessPerfCounterEntry{prev_counter: counter, proc_counter: 0};
                 let mut additional_cycles: u64 = 0;

@@ -2,7 +2,7 @@ use aya::maps::{Array, MapData, HashMap};
 use aya::programs::perf_event::{perf_hw_id, PerfEventScope};
 use aya::programs::{PerfEvent, PerfTypeId, SamplePolicy, TracePoint, Xdp, XdpFlags, Program};
 use aya::util::online_cpus;
-use aya::{include_bytes_aligned, Bpf, Pod};
+use aya::{include_bytes_aligned, Bpf};
 use aya_log::BpfLogger;
 use libc::__c_anonymous_ptrace_syscall_info_entry;
 use log::{debug, info, warn};
@@ -11,43 +11,13 @@ use std::{
     env::args,
     borrow::BorrowMut,
     time::Instant,
-    fs::read_to_string,
 };
-use scanf::sscanf;
 use clap::{ Parser, Subcommand };
+use trac_common::*;
 
-static START_TIME_KEY: u64 = 0;
-static SAMEPLE_RATE_KEY: u64 = 1;
-static PID_KEY: u64 = 2;
+mod helpers;
+use helpers::boot_time_get_ns;
 
-#[derive(Debug, Copy, Clone)]
-pub struct NettraceSample {
-	pub bytes: u64,
-	pub count: u64,
-}
-
-unsafe impl Pod for NettraceSample{ }
-
-pub fn boot_time_get_ns() -> Result<u64, u64> {
-    let result = match read_to_string("/proc/uptime") {
-        Ok(line) => { 
-            info!("{}", line);
-            let mut boot_time_ns = 0.0;
-            sscanf!(&line, "{} {}", boot_time_ns);
-            info!("{}", boot_time_ns);
-            (boot_time_ns * 1000000000.0) as u64
-            // match sscanf!(line, "{f32} {f32}") {
-            //     Ok(ret) => {
-            //         info!("{}", ret.0);
-            //         Ok((ret.0 * 1000000000.0) as u64)
-            //     },
-            //     Err(_) => Err(0),
-            // }
-        },
-        Err(_) => 0,
-    };
-    Ok(result)
-}
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -66,6 +36,10 @@ enum Commands {
         iface: String,
     },
     CPU {
+        #[clap(short, long)]
+        pid: u64,
+    },
+    Mem {
         #[clap(short, long)]
         pid: u64,
     },
@@ -141,6 +115,40 @@ async fn handle_cpu(pid: &u64, bpf: &mut Bpf) {
     }
 }
 
+async fn handle_mem(pid: &u64, bpf: &mut Bpf) {
+    let program_tracepoint: &mut TracePoint = bpf.program_mut("observe_memory").unwrap().try_into().unwrap();
+    program_tracepoint.load().unwrap();
+    program_tracepoint.attach("kmem", "rss_stat").unwrap();
+
+
+    let mut settings_map = HashMap::try_from(bpf.map_mut("SETTINGS_MAP").unwrap()).unwrap() as HashMap<&mut MapData, u64, u64>;
+    match boot_time_get_ns() {
+        Ok(boot_time) => {
+            settings_map.insert(START_TIME_KEY, boot_time, 0);
+            settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
+            settings_map.insert(PID_KEY, pid, 0);
+        },
+        Err(_) => {
+            panic!("failed to get boot time nanoseconds");
+        }
+    }
+
+    let rss_stat_map = Array::try_from(bpf.map_mut("RSS_STAT_MAP").unwrap()).unwrap() as Array<&mut MapData, i64>;
+    let start_time = Instant::now();
+    
+    info!("Waiting for Ctrl-C...");
+    signal::ctrl_c().await.unwrap();
+    info!("Exiting...");
+
+    let mut cur: i64 = 0;
+    let num_buckets = (Instant::now().duration_since(start_time).as_millis() / 500) as u32;
+    for i in 0..num_buckets {
+        let k = rss_stat_map.get(&i, 0).unwrap();
+        cur += k;
+        info!("{cur}");
+    }
+}
+
 async fn handle_net(iface: &String, bpf: &mut Bpf) {
     let program_xdp: &mut Xdp = bpf.program_mut("observe_iface").unwrap().try_into().unwrap();
     program_xdp.load().unwrap();
@@ -182,11 +190,10 @@ async fn main() -> Result<(), anyhow::Error> {
             handle_cpu(&pid, &mut bpf).await;
         }
         Some(Commands::Net { iface }) => {
-            // let mut bpf_xdp = Bpf::load(include_bytes_aligned!(
-            //     "../../target/debug/trac-xdp"
-            // )).unwrap();
-
             handle_net(&iface, &mut bpf).await;
+        }
+        Some(Commands::Mem { pid }) => {
+            handle_mem(&pid, &mut bpf).await;
         }
         None => {
             println!("Default subcommand");

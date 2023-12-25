@@ -13,31 +13,11 @@ use aya_bpf::{
     BpfContext,
     maps::{ PerCpuHashMap, Array, HashMap },
 };
-use aya_log_ebpf::info;
 use core::{ptr::addr_of_mut, mem::size_of};
 use task::task_struct;
 use perf_event::bpf_perf_event_data as native_bpf_perf_event_data;
 use net::{xdp_md, ethhdr, iphdr, ipv6hdr, tcphdr, udphdr};
-
-pub struct ProcessPerfCounterEntry {
-    pub prev_counter: u64,
-    pub proc_counter: u64,
-}
-
-pub struct NettraceSample {
-	pub bytes: u64,
-	pub count: u64,
-}
-
-static START_TIME_KEY: u64 = 0;
-static SAMEPLE_RATE_KEY: u64 = 1;
-static PID_KEY: u64 = 2;
-static MS_IN_NS: u64 = 1000000;
-
-static ETH_P_IP: u16 = (0x0800 as u16).to_be();
-static ETH_P_IPV6: u16 = (0x86DD as u16).to_be();
-static IPPROTO_TCP: u32 = 6;
-static IPPROTO_UDP: u32 = 17;
+use trac_common::*;
 
 #[map]
 static SETTINGS_MAP: HashMap<u64, u64> = HashMap::with_max_entries(3, 0);
@@ -47,6 +27,12 @@ static PROC_MAP: PerCpuHashMap<u64, ProcessPerfCounterEntry> = PerCpuHashMap::wi
 
 #[map]
 static TOTAL_CYCLES_MAP: Array<u64> = Array::with_max_entries(262144, 0);
+
+#[map]
+static RSS_LAST_STATE_MAP: HashMap<i32, RSSStatSample> = HashMap::with_max_entries(100, 0);
+
+#[map]
+static RSS_STAT_MAP: Array<i64> = Array::with_max_entries(262144, 0);
 
 #[map]
 static NETTRACE_MAP: Array<NettraceSample> = Array::with_max_entries(262144, 0);
@@ -72,16 +58,12 @@ fn get_current_bucket() -> u32 {
     match unsafe { SETTINGS_MAP.get(&START_TIME_KEY) } {
         None => 0,
         Some(i) => {
-            // TODO: replace 500 by sample rate
             ((timestamp - i) / MS_IN_NS / get_sample_rate()) as u32
         }
     }
 }
 
 fn try_observe_cpu_clock(ctx: PerfEventContext) -> Result<u32, u32> {
-    // let cpu = unsafe { bpf_get_smp_processor_id() };
-    // let prog_name =  bpf_get_current_comm().map_err(|e| e as u32)?;
-    // let prog_name = unsafe { from_utf8_unchecked(&prog_name) };
     let mut task: *mut task_struct = unsafe { bpf_get_current_task_btf() as *mut task_struct };
     let read_value_ctx: *mut native_bpf_perf_event_data = ctx.as_ptr() as *mut native_bpf_perf_event_data;
     let mut value = bpf_perf_event_value { counter: 0, enabled: 0, running: 0 };
@@ -122,10 +104,6 @@ fn try_observe_cpu_clock(ctx: PerfEventContext) -> Result<u32, u32> {
                     }
                 }
 
-                // info!(&ctx, "prog_name: {}", prog_name);
-                // info!(&ctx, "pid: {}", cur_pid);
-                // info!(&ctx, "cpu: {}", cpu);
-                // info!(&ctx, "valuee: {}", proc_entry.proc_counter);
                 break;
             }
             _ => {}
@@ -142,15 +120,65 @@ fn try_observe_cpu_clock(ctx: PerfEventContext) -> Result<u32, u32> {
 }
 
 #[tracepoint]
-pub fn trac(ctx: TracePointContext) -> u32 {
-    match try_trac(ctx) {
+pub fn observe_memory(ctx: TracePointContext) -> u32 {
+    match try_observe_memory(ctx) {
         Ok(ret) => ret,
         Err(ret) => ret,
     }
 }
 
-fn try_trac(ctx: TracePointContext) -> Result<u32, u32> {
-    info!(&ctx, "tracepoint sched_switch called");
+fn try_observe_memory(ctx: TracePointContext) -> Result<u32, u32> {
+    let mut task: *mut task_struct = unsafe { bpf_get_current_task_btf() as *mut task_struct };
+    let pid = unsafe { (*task).pid };
+    // TODO: chenage context target type 
+    let readable_ctx: *mut RSSStatArgs = ctx.as_ptr() as *mut RSSStatArgs;
+    let mtype = unsafe { (*readable_ctx).member } as usize;
+    let size = unsafe { (*readable_ctx).size };
+    
+    let watch_pid: u64 = match unsafe { SETTINGS_MAP.get(&PID_KEY) } {
+        None => 0,
+        Some(p) => *p,
+    };
+    
+    for _ in 1..8 {
+        let cur_pid = unsafe { (*task).pid } as u64;
+        // TODO: calc bytes
+        match cur_pid {
+            0 => break,
+            1 => break,
+            w if w == watch_pid => {
+                match RSS_LAST_STATE_MAP.get_ptr_mut(&pid) {
+                    None => {
+                        _ = RSS_LAST_STATE_MAP.insert(&pid, &RSSStatSample{ previous: [0,0,0,0] }, 0);
+                    }
+                    Some(state) => {
+                        if mtype > 3 {
+                            return Err(0);
+                        }
+                        
+                        let current_bucket = get_current_bucket();
+
+                        match RSS_STAT_MAP.get_ptr_mut(current_bucket) {
+                            None => {}
+                            Some(stat) => {
+                                unsafe { *stat += size as i64 - (*state).previous[mtype] as i64 };
+                            }
+                        }
+
+                        unsafe { (*state).previous[mtype] = size as u64 };
+                    }
+                }
+                break;
+            }
+            _ => {}
+        }
+        
+        if unsafe { (*task).parent }.is_null() {
+            break;
+        } else {
+            task = unsafe { (*task).parent };
+        }
+    }
     Ok(0)
 }
 

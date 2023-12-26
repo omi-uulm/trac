@@ -35,6 +35,9 @@ static RSS_LAST_STATE_MAP: HashMap<i32, RSSStatSample> = HashMap::with_max_entri
 static RSS_STAT_MAP: Array<i64> = Array::with_max_entries(262144, 0);
 
 #[map]
+static DISK_IOPS_MAP: Array<DiskIOPSSample> = Array::with_max_entries(262144, 0);
+
+#[map]
 static NETTRACE_MAP: Array<NettraceSample> = Array::with_max_entries(262144, 0);
 
 #[perf_event]
@@ -120,6 +123,50 @@ fn try_observe_cpu_clock(ctx: PerfEventContext) -> Result<u32, u32> {
 }
 
 #[tracepoint]
+pub fn observe_disk(ctx: TracePointContext) -> u32 {
+    match try_observe_disk(ctx) {
+        Ok(ret) => ret,
+        Err(ret) => ret,
+    }
+}
+
+fn try_observe_disk(ctx: TracePointContext) -> Result<u32, u32> {
+    let mut task: *mut task_struct = unsafe { bpf_get_current_task_btf() as *mut task_struct };
+    let readable_ctx: *mut block_block_io_start_args = ctx.as_ptr() as *mut block_block_io_start_args;
+    let watch_pid: u64 = match unsafe { SETTINGS_MAP.get(&PID_KEY) } {
+        None => 0,
+        Some(p) => *p,
+    };
+    
+    for _ in 1..8 {
+        let cur_pid = unsafe { (*task).pid } as u64;
+        match cur_pid {
+            0 => break,
+            1 => break,
+            w if w == watch_pid => {
+                let current_bucket = get_current_bucket();
+
+                match DISK_IOPS_MAP.get_ptr_mut(current_bucket) {
+                    None => {},
+                    Some(i) => {
+                        unsafe { (*i).iops += 1 };
+                        unsafe { (*i).bytes += (*readable_ctx).bytes as u64 };
+                    }
+                }
+            }
+            _ => {}
+        }
+        
+        if unsafe { (*task).parent }.is_null() {
+            break;
+        } else {
+            task = unsafe { (*task).parent };
+        }
+    }
+    Ok(0)
+}
+
+#[tracepoint]
 pub fn observe_memory(ctx: TracePointContext) -> u32 {
     match try_observe_memory(ctx) {
         Ok(ret) => ret,
@@ -130,8 +177,7 @@ pub fn observe_memory(ctx: TracePointContext) -> u32 {
 fn try_observe_memory(ctx: TracePointContext) -> Result<u32, u32> {
     let mut task: *mut task_struct = unsafe { bpf_get_current_task_btf() as *mut task_struct };
     let pid = unsafe { (*task).pid };
-    // TODO: chenage context target type 
-    let readable_ctx: *mut RSSStatArgs = ctx.as_ptr() as *mut RSSStatArgs;
+    let readable_ctx: *mut kmem_rss_stat_args = ctx.as_ptr() as *mut kmem_rss_stat_args;
     let mtype = unsafe { (*readable_ctx).member } as usize;
     let size = unsafe { (*readable_ctx).size };
     
@@ -142,7 +188,6 @@ fn try_observe_memory(ctx: TracePointContext) -> Result<u32, u32> {
     
     for _ in 1..8 {
         let cur_pid = unsafe { (*task).pid } as u64;
-        // TODO: calc bytes
         match cur_pid {
             0 => break,
             1 => break,

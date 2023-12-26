@@ -1,6 +1,6 @@
 #![no_std]
 
-#[allow(non_camel_case_types)]
+#![allow(non_camel_case_types)]
 pub enum RSSMember {
     MM_FILEPAGES,	/* Resident file mapping pages */
 	MM_ANONPAGES,	/* Resident anonymous pages */
@@ -21,14 +21,34 @@ pub struct NettraceSample {
 #[cfg(feature = "user")]
 unsafe impl aya::Pod for NettraceSample{ }
 
+#[derive(Debug, Copy, Clone)]
+pub struct DiskIOPSSample {
+    pub iops: u64,
+    pub bytes: u64,
+}
+
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for DiskIOPSSample{ }
 #[repr(C)]
-pub struct RSSStatArgs {
+pub struct kmem_rss_stat_args {
     pub _unused: u64,
     pub mm_id: u32,
     pub curr: u32,
     pub member: i32,
     pub _unused2: u32,
     pub size: i64
+}
+
+#[repr(C)]
+pub struct block_block_io_start_args {
+    pub _unused: u64,
+    pub dev: u32,
+    pub sector: u64,
+    pub nr_sector: u32,
+    pub bytes: u32,
+    pub rwbs: [char; 8],
+    pub comm: [char; 16],
+    pub cmd: [char; 4],
 }
 
 pub struct RSSStatSample {

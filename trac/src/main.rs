@@ -23,8 +23,8 @@ use helpers::boot_time_get_ns;
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
 struct Cli {
-    #[clap(short, default_value = "test", global = true)]
-    test: String,
+    // #[clap(short, default_value = "test", global = true)]
+    // test: String,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -40,6 +40,10 @@ enum Commands {
         pid: u64,
     },
     Mem {
+        #[clap(short, long)]
+        pid: u64,
+    },
+    Dsk {
         #[clap(short, long)]
         pid: u64,
     },
@@ -111,7 +115,38 @@ async fn handle_cpu(pid: &u64, bpf: &mut Bpf) {
     let num_buckets = (Instant::now().duration_since(start_time).as_millis() / 500) as u32;
     for i in 0..num_buckets {
         let k = cycles_map.get(&i, 0).unwrap();
-        info!("{k}");
+        info!("{}", k);
+    }
+}
+
+async fn handle_disk(pid: &u64, bpf: &mut Bpf) {    
+    let program_tracepoint: &mut TracePoint = bpf.program_mut("observe_disk").unwrap().try_into().unwrap();
+    program_tracepoint.load().unwrap();
+    program_tracepoint.attach("block", "block_io_start").unwrap();
+
+    let mut settings_map = HashMap::try_from(bpf.map_mut("SETTINGS_MAP").unwrap()).unwrap() as HashMap<&mut MapData, u64, u64>;
+    match boot_time_get_ns() {
+        Ok(boot_time) => {
+            settings_map.insert(START_TIME_KEY, boot_time, 0);
+            settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
+            settings_map.insert(PID_KEY, pid, 0);
+        },
+        Err(_) => {
+            panic!("failed to get boot time nanoseconds");
+        }
+    }
+
+    let disk_iops_map = Array::try_from(bpf.map_mut("DISK_IOPS_MAP").unwrap()).unwrap() as Array<&mut MapData, DiskIOPSSample>;
+    let start_time = Instant::now();
+    
+    info!("Waiting for Ctrl-C...");
+    signal::ctrl_c().await.unwrap();
+    info!("Exiting...");
+
+    let num_buckets = (Instant::now().duration_since(start_time).as_millis() / 500) as u32;
+    for i in 0..num_buckets {
+        let k = disk_iops_map.get(&i, 0).unwrap();
+        info!("{},{}", k.iops, k.bytes);
     }
 }
 
@@ -175,7 +210,7 @@ async fn handle_net(iface: &String, bpf: &mut Bpf) {
     let num_buckets = (Instant::now().duration_since(start_time).as_millis() / 500) as u32;
     for i in 0..num_buckets {
         let k = nettrace_map.get(&i, 0).unwrap();
-        info!("{}", k.bytes);
+        info!("{},{}", k.count, k.bytes);
     }
 }
 
@@ -194,6 +229,9 @@ async fn main() -> Result<(), anyhow::Error> {
         }
         Some(Commands::Mem { pid }) => {
             handle_mem(&pid, &mut bpf).await;
+        }
+        Some(Commands::Dsk { pid}) => {
+            handle_disk(&pid, &mut bpf).await;
         }
         None => {
             println!("Default subcommand");

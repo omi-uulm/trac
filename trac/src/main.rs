@@ -83,12 +83,11 @@ fn init() -> Bpf {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    let cli = Cli::parse();
     let mut bpf = init();
 
-    let cli = Cli::parse();
-
     let mut tracer: Box<dyn Resource> = match &cli.command {
-        Some( Commands::CPU { pid }) => Box::new(cpu::CPU::new(&mut bpf, pid)),
+        Some(Commands::CPU { pid }) => Box::new(cpu::CPU::new(&mut bpf, pid)),
         Some(Commands::Net { iface }) => Box::new(net::Net::new(&mut bpf, iface)),
         Some(Commands::Mem { pid }) => Box::new(mem::Mem::new(&mut bpf, pid)),
         Some(Commands::Dsk { pid}) => Box::new(disk::Disk::new(&mut bpf, pid)),

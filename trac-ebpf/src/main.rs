@@ -32,7 +32,7 @@ static TOTAL_CYCLES_MAP: Array<u64> = Array::with_max_entries(262144, 0);
 static RSS_LAST_STATE_MAP: HashMap<i32, RSSStatSample> = HashMap::with_max_entries(100, 0);
 
 #[map]
-static RSS_STAT_MAP: Array<i64> = Array::with_max_entries(262144, 0);
+static RSS_STAT_MAP: Array<[i64; 5]> = Array::with_max_entries(262144, 0);
 
 #[map]
 static DISK_IOPS_MAP: Array<DiskIOPSSample> = Array::with_max_entries(262144, 0);
@@ -206,7 +206,8 @@ fn try_observe_memory(ctx: TracePointContext) -> Result<u32, u32> {
                         match RSS_STAT_MAP.get_ptr_mut(current_bucket) {
                             None => {}
                             Some(stat) => {
-                                unsafe { *stat += size as i64 - (*state).previous[mtype] as i64 };
+                                unsafe { (*stat)[mtype] += size as i64 - (*state).previous[mtype] as i64 };
+                                unsafe { (*stat)[RSSMember::MM_TOTAL as usize] += size as i64 - (*state).previous[mtype] as i64 };
                             }
                         }
 

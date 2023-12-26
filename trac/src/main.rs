@@ -7,6 +7,8 @@ use aya_log::BpfLogger;
 use libc::__c_anonymous_ptrace_syscall_info_entry;
 use log::{debug, info, warn};
 use tokio::signal;
+use std::thread::sleep;
+use std::time::Duration;
 use std::{
     env::args,
     borrow::BorrowMut,
@@ -18,16 +20,28 @@ use trac_common::*;
 mod helpers;
 use helpers::boot_time_get_ns;
 
+use crate::helpers::get_rss_member_name;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
 struct Cli {
-    // #[clap(short, default_value = "test", global = true)]
-    // test: String,
+    #[clap(short, long, global = true, default_value = "0", required = false)]
+    timeout: i64,
 
     #[command(subcommand)]
     command: Option<Commands>,
+}
+impl Cli {
+    async fn timeout_or_ctrl_c(&self) {
+        if self.timeout <= 0 {
+            info!("Waiting for Ctrl-C...");
+            signal::ctrl_c().await.unwrap();
+            info!("Exiting...");
+        } else {
+            sleep(Duration::from_secs(self.timeout as u64))
+        }
+    }
 }
 #[derive(Subcommand)]
 enum Commands {
@@ -82,7 +96,7 @@ fn init() -> Bpf {
     return bpf
 }
 
-async fn handle_cpu(pid: &u64, bpf: &mut Bpf) {
+fn handle_cpu(pid: &u64, bpf: &mut Bpf) -> Instant {
     let program_perf: &mut PerfEvent = bpf.program_mut("observe_cpu_clock").unwrap().try_into().unwrap();
     program_perf.load().unwrap();
     for cpu in online_cpus().unwrap() {
@@ -105,21 +119,20 @@ async fn handle_cpu(pid: &u64, bpf: &mut Bpf) {
         }
     }
 
-    let cycles_map = Array::try_from(bpf.map_mut("TOTAL_CYCLES_MAP").unwrap()).unwrap() as Array<&mut MapData, u64>;
-    let start_time = Instant::now();
-    
-    info!("Waiting for Ctrl-C...");
-    signal::ctrl_c().await.unwrap();
-    info!("Exiting...");
-    
+    Instant::now()
+}
+
+fn print_cpu(start_time: Instant, bpf: &mut Bpf) {
+    let cycles_map: Array<&mut MapData, u64> = Array::try_from(bpf.map_mut("TOTAL_CYCLES_MAP").unwrap()).unwrap() as Array<&mut MapData, u64>;
+    println!("timestamp,cycles");
     let num_buckets = (Instant::now().duration_since(start_time).as_millis() / 500) as u32;
     for i in 0..num_buckets {
         let k = cycles_map.get(&i, 0).unwrap();
-        info!("{}", k);
+        println!("{},{}", i, k);
     }
 }
 
-async fn handle_disk(pid: &u64, bpf: &mut Bpf) {    
+fn handle_disk(pid: &u64, bpf: &mut Bpf) -> Instant {    
     let program_tracepoint: &mut TracePoint = bpf.program_mut("observe_disk").unwrap().try_into().unwrap();
     program_tracepoint.load().unwrap();
     program_tracepoint.attach("block", "block_io_start").unwrap();
@@ -135,22 +148,21 @@ async fn handle_disk(pid: &u64, bpf: &mut Bpf) {
             panic!("failed to get boot time nanoseconds");
         }
     }
+    Instant::now()
 
+}
+
+fn print_disk(start_time: Instant, bpf: &mut Bpf) {
     let disk_iops_map = Array::try_from(bpf.map_mut("DISK_IOPS_MAP").unwrap()).unwrap() as Array<&mut MapData, DiskIOPSSample>;
-    let start_time = Instant::now();
-    
-    info!("Waiting for Ctrl-C...");
-    signal::ctrl_c().await.unwrap();
-    info!("Exiting...");
-
+    println!("timestamp,iops,bytes");
     let num_buckets = (Instant::now().duration_since(start_time).as_millis() / 500) as u32;
     for i in 0..num_buckets {
         let k = disk_iops_map.get(&i, 0).unwrap();
-        info!("{},{}", k.iops, k.bytes);
+        println!("{},{},{}", i, k.iops, k.bytes);
     }
 }
 
-async fn handle_mem(pid: &u64, bpf: &mut Bpf) {
+fn handle_mem(pid: &u64, bpf: &mut Bpf) -> Instant {
     let program_tracepoint: &mut TracePoint = bpf.program_mut("observe_memory").unwrap().try_into().unwrap();
     program_tracepoint.load().unwrap();
     program_tracepoint.attach("kmem", "rss_stat").unwrap();
@@ -168,23 +180,24 @@ async fn handle_mem(pid: &u64, bpf: &mut Bpf) {
         }
     }
 
-    let rss_stat_map = Array::try_from(bpf.map_mut("RSS_STAT_MAP").unwrap()).unwrap() as Array<&mut MapData, i64>;
-    let start_time = Instant::now();
-    
-    info!("Waiting for Ctrl-C...");
-    signal::ctrl_c().await.unwrap();
-    info!("Exiting...");
+    Instant::now()
+}
 
-    let mut cur: i64 = 0;
+fn print_mem(start_time: Instant, bpf: &mut Bpf) {
+    let rss_stat_map = Array::try_from(bpf.map_mut("RSS_STAT_MAP").unwrap()).unwrap() as Array<&mut MapData, [i64;5]>;
+    println!("timestamp,{},{},{},{},{}", get_rss_member_name(0), get_rss_member_name(1), get_rss_member_name(2), get_rss_member_name(3), get_rss_member_name(4));
+    let mut cur: [i64; 5] = [0,0,0,0,0];
     let num_buckets = (Instant::now().duration_since(start_time).as_millis() / 500) as u32;
     for i in 0..num_buckets {
-        let k = rss_stat_map.get(&i, 0).unwrap();
-        cur += k;
-        info!("{cur}");
+        let val = rss_stat_map.get(&i, 0).unwrap();
+        for (i, k) in val.iter().enumerate() {
+            cur[i] += k;
+        }
+        println!("{},{},{},{},{},{}", i, cur[0], cur[1], cur[2], cur[3], cur[4]);
     }
 }
 
-async fn handle_net(iface: &String, bpf: &mut Bpf) {
+fn handle_net(iface: &String, bpf: &mut Bpf) -> Instant {
     let program_xdp: &mut Xdp = bpf.program_mut("observe_iface").unwrap().try_into().unwrap();
     program_xdp.load().unwrap();
     program_xdp.attach(&iface, XdpFlags::default()).unwrap();
@@ -200,17 +213,16 @@ async fn handle_net(iface: &String, bpf: &mut Bpf) {
         }
     }
 
+    Instant::now()
+}
+
+fn print_net(start_time: Instant, bpf: &mut Bpf) {
     let nettrace_map = Array::try_from(bpf.map_mut("NETTRACE_MAP").unwrap()).unwrap() as Array<&mut MapData, NettraceSample>;
-    let start_time: Instant = Instant::now();
-
-    info!("Waiting for Ctrl-C...");
-    signal::ctrl_c().await.unwrap();
-    info!("Exiting...");
-
+    println!("timestamp,count,bytes");
     let num_buckets = (Instant::now().duration_since(start_time).as_millis() / 500) as u32;
     for i in 0..num_buckets {
         let k = nettrace_map.get(&i, 0).unwrap();
-        info!("{},{}", k.count, k.bytes);
+        println!("{},{},{}", i, k.count, k.bytes);
     }
 }
 
@@ -222,16 +234,24 @@ async fn main() -> Result<(), anyhow::Error> {
 
     match &cli.command {
         Some( Commands::CPU { pid }) => {
-            handle_cpu(&pid, &mut bpf).await;
+            let start_time = handle_cpu(&pid, &mut bpf);
+            cli.timeout_or_ctrl_c().await;
+            print_cpu(start_time, &mut bpf);
         }
         Some(Commands::Net { iface }) => {
-            handle_net(&iface, &mut bpf).await;
+            let start_time = handle_net(&iface, &mut bpf);
+            cli.timeout_or_ctrl_c().await;
+            print_net(start_time, &mut bpf);
         }
         Some(Commands::Mem { pid }) => {
-            handle_mem(&pid, &mut bpf).await;
+            let start_time = handle_mem(&pid, &mut bpf);
+            cli.timeout_or_ctrl_c().await;
+            print_mem(start_time, &mut bpf);
         }
         Some(Commands::Dsk { pid}) => {
-            handle_disk(&pid, &mut bpf).await;
+            let start_time = handle_disk(&pid, &mut bpf);
+            cli.timeout_or_ctrl_c().await;
+            print_disk(start_time, &mut bpf);
         }
         None => {
             println!("Default subcommand");

@@ -14,7 +14,7 @@ use std::{
     borrow::BorrowMut,
     time::Instant,
 };
-use clap::{ Parser, Subcommand };
+use clap::{ Parser, Subcommand, Arg };
 use trac_common::*;
 
 mod helpers;
@@ -26,39 +26,39 @@ use crate::helpers::get_rss_member_name;
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
 struct Cli {
-    #[clap(short, long, global = true, default_value = "0", required = false)]
-    timeout: i64,
+    #[clap(short, long, global = true, default_value = "0", required = false, help = "Trace duration seconds. A value less or equal to 0 means running forever.")]
+    duration: i64,
 
     #[command(subcommand)]
     command: Option<Commands>,
 }
 impl Cli {
-    async fn timeout_or_ctrl_c(&self) {
-        if self.timeout <= 0 {
+    async fn duration_or_ctrl_c(&self) {
+        if self.duration <= 0 {
             info!("Waiting for Ctrl-C...");
             signal::ctrl_c().await.unwrap();
             info!("Exiting...");
         } else {
-            sleep(Duration::from_secs(self.timeout as u64))
+            sleep(Duration::from_secs(self.duration as u64))
         }
     }
 }
 #[derive(Subcommand)]
 enum Commands {
     Net {
-        #[clap(short, long, default_value = "eth0")]
+        #[clap(short, long, default_value = "eth0", help = "Interface name")]
         iface: String,
     },
     CPU {
-        #[clap(short, long)]
+        #[clap(short, long, help = "PID tree to be traced")]
         pid: u64,
     },
     Mem {
-        #[clap(short, long)]
+        #[clap(short, long, help = "PID tree to be traced")]
         pid: u64,
     },
     Dsk {
-        #[clap(short, long)]
+        #[clap(short, long, help = "PID tree to be traced")]
         pid: u64,
     },
 }
@@ -235,22 +235,22 @@ async fn main() -> Result<(), anyhow::Error> {
     match &cli.command {
         Some( Commands::CPU { pid }) => {
             let start_time = handle_cpu(&pid, &mut bpf);
-            cli.timeout_or_ctrl_c().await;
+            cli.duration_or_ctrl_c().await;
             print_cpu(start_time, &mut bpf);
         }
         Some(Commands::Net { iface }) => {
             let start_time = handle_net(&iface, &mut bpf);
-            cli.timeout_or_ctrl_c().await;
+            cli.duration_or_ctrl_c().await;
             print_net(start_time, &mut bpf);
         }
         Some(Commands::Mem { pid }) => {
             let start_time = handle_mem(&pid, &mut bpf);
-            cli.timeout_or_ctrl_c().await;
+            cli.duration_or_ctrl_c().await;
             print_mem(start_time, &mut bpf);
         }
         Some(Commands::Dsk { pid}) => {
             let start_time = handle_disk(&pid, &mut bpf);
-            cli.timeout_or_ctrl_c().await;
+            cli.duration_or_ctrl_c().await;
             print_disk(start_time, &mut bpf);
         }
         None => {

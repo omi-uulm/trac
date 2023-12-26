@@ -1,4 +1,5 @@
 use aya::{ include_bytes_aligned, Bpf };
+use indicatif::{ProgressBar, ProgressStyle};
 // use aya_log::BpfLogger;
 use log::{ debug, info };
 use tokio::signal;
@@ -23,6 +24,9 @@ struct Cli {
     #[clap(short, long, global = true, default_value = "500", required = false, help = "Sampling rate in milliseconds. This resolution also applies to the time buckets in the CSV output.")]
     sample_rate: u64,
 
+    #[clap(long, global = true, default_value = "false", required = false, help = "Display progress bar.")]
+    progress: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -33,7 +37,17 @@ impl Cli {
             signal::ctrl_c().await.unwrap();
             info!("Exiting...");
         } else {
-            sleep(Duration::from_secs(self.duration as u64))
+            if self.progress {
+                let bar = ProgressBar::new(self.duration as u64);
+                bar.set_style(ProgressStyle::with_template("[{elapsed}/{duration}] {wide_bar}")
+                    .unwrap());
+                for i in 0..self.duration {
+                    sleep(Duration::from_secs(1));
+                    bar.inc(1);
+                }
+            } else {
+                sleep(Duration::from_secs(self.duration as u64));
+            }
         }
     }
 }

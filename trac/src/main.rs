@@ -24,7 +24,7 @@ struct Cli {
     #[clap(short, long, global = true, default_value = "500", required = false, help = "Sampling rate in milliseconds. This resolution also applies to the time buckets in the CSV output.")]
     sample_rate: u64,
 
-    #[clap(long, global = true, default_value = "false", required = false, help = "Display progress bar.")]
+    #[clap(long, global = true, default_value = "false", required = false, help = "Display progress bar")]
     progress: bool,
 
     #[command(subcommand)]
@@ -41,7 +41,7 @@ impl Cli {
                 let bar = ProgressBar::new(self.duration as u64);
                 bar.set_style(ProgressStyle::with_template("[{elapsed}/{duration}] {wide_bar}")
                     .unwrap());
-                for i in 0..self.duration {
+                for _ in 0..self.duration {
                     sleep(Duration::from_secs(1));
                     bar.inc(1);
                 }
@@ -51,6 +51,8 @@ impl Cli {
         }
     }
 }
+
+
 #[derive(Subcommand)]
 enum Commands {
     Net {

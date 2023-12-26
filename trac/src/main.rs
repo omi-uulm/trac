@@ -1,20 +1,28 @@
-use aya::maps::{Array, MapData, HashMap};
-use aya::programs::perf_event::{perf_hw_id, PerfEventScope};
-use aya::programs::{PerfEvent, PerfTypeId, SamplePolicy, TracePoint, Xdp, XdpFlags, Program};
-use aya::util::online_cpus;
-use aya::{include_bytes_aligned, Bpf};
-use aya_log::BpfLogger;
-use libc::__c_anonymous_ptrace_syscall_info_entry;
-use log::{debug, info, warn};
-use tokio::signal;
-use std::thread::sleep;
-use std::time::Duration;
-use std::{
-    env::args,
-    borrow::BorrowMut,
-    time::Instant,
+use aya::{
+    maps::{Array, MapData, HashMap},
+    programs::{
+        perf_event::{perf_hw_id, PerfEventScope },
+        PerfEvent,
+        PerfTypeId,
+        SamplePolicy,
+        TracePoint,
+        Xdp,
+        XdpFlags,
+    }
 };
-use clap::{ Parser, Subcommand, Arg };
+use aya::{
+    util::online_cpus,
+    include_bytes_aligned,
+    Bpf
+};
+// use aya_log::BpfLogger;
+use log::{ debug, info };
+use tokio::signal;
+use std::{
+    thread::sleep,
+    time::{ Instant, Duration },
+};
+use clap::{ Parser, Subcommand };
 use trac_common::*;
 
 mod helpers;
@@ -82,17 +90,17 @@ fn init() -> Bpf {
     // like to specify the eBPF program at runtime rather than at compile-time, you can
     // reach for `Bpf::load_file` instead.
     #[cfg(debug_assertions)]
-    let mut bpf = Bpf::load(include_bytes_aligned!(
+    let bpf = Bpf::load(include_bytes_aligned!(
         "../../target/bpfel-unknown-none/debug/trac"
     )).unwrap();
     #[cfg(not(debug_assertions))]
-    let mut bpf = Bpf::load(include_bytes_aligned!(
+    let bpf = Bpf::load(include_bytes_aligned!(
         "../../target/bpfel-unknown-none/release/trac"
     )).unwrap();
-    if let Err(e) = BpfLogger::init(&mut bpf) {
-        // This can happen if you remove all log statements from your eBPF program.
-        warn!("failed to initialize eBPF logger: {}", e);
-    }
+    // if let Err(e) = BpfLogger::init(&mut bpf) {
+    //     // This can happen if you remove all log statements from your eBPF program.
+    //     warn!("failed to initialize eBPF logger: {}", e);
+    // }
     return bpf
 }
 
@@ -110,9 +118,9 @@ fn handle_cpu(pid: &u64, bpf: &mut Bpf) -> Instant {
     let mut settings_map = HashMap::try_from(bpf.map_mut("SETTINGS_MAP").unwrap()).unwrap() as HashMap<&mut MapData, u64, u64>;
     match boot_time_get_ns() {
         Ok(boot_time) => {
-            settings_map.insert(START_TIME_KEY, boot_time, 0);
-            settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
-            settings_map.insert(PID_KEY, pid, 0);
+            let _ = settings_map.insert(START_TIME_KEY, boot_time, 0);
+            let _ = settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
+            let _ = settings_map.insert(PID_KEY, pid, 0);
         },
         Err(_) => {
             panic!("failed to get boot time nanoseconds");
@@ -140,9 +148,9 @@ fn handle_disk(pid: &u64, bpf: &mut Bpf) -> Instant {
     let mut settings_map = HashMap::try_from(bpf.map_mut("SETTINGS_MAP").unwrap()).unwrap() as HashMap<&mut MapData, u64, u64>;
     match boot_time_get_ns() {
         Ok(boot_time) => {
-            settings_map.insert(START_TIME_KEY, boot_time, 0);
-            settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
-            settings_map.insert(PID_KEY, pid, 0);
+            let _ = settings_map.insert(START_TIME_KEY, boot_time, 0);
+            let _ = settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
+            let _ = settings_map.insert(PID_KEY, pid, 0);
         },
         Err(_) => {
             panic!("failed to get boot time nanoseconds");
@@ -171,9 +179,9 @@ fn handle_mem(pid: &u64, bpf: &mut Bpf) -> Instant {
     let mut settings_map = HashMap::try_from(bpf.map_mut("SETTINGS_MAP").unwrap()).unwrap() as HashMap<&mut MapData, u64, u64>;
     match boot_time_get_ns() {
         Ok(boot_time) => {
-            settings_map.insert(START_TIME_KEY, boot_time, 0);
-            settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
-            settings_map.insert(PID_KEY, pid, 0);
+            let _ = settings_map.insert(START_TIME_KEY, boot_time, 0);
+            let _ = settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
+            let _ = settings_map.insert(PID_KEY, pid, 0);
         },
         Err(_) => {
             panic!("failed to get boot time nanoseconds");
@@ -205,8 +213,8 @@ fn handle_net(iface: &String, bpf: &mut Bpf) -> Instant {
     let mut settings_map = HashMap::try_from(bpf.map_mut("SETTINGS_MAP").unwrap()).unwrap() as HashMap<&mut MapData, u64, u64>;
     match boot_time_get_ns() {
         Ok(boot_time) => {
-            settings_map.insert(START_TIME_KEY, boot_time, 0);
-            settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
+            let _ = settings_map.insert(START_TIME_KEY, boot_time, 0);
+            let _ = settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
         },
         Err(_) => {
             panic!("failed to get boot time nanoseconds");

@@ -62,7 +62,7 @@ impl <'a>Resource for Disk<'a> {
         for i in 0..num_buckets {
             let k: DiskIOPSSample = disk_iops_map.get(&i, 0).unwrap();
             ret.push(DiskSample{
-                timestamp: (i+1) as u64,
+                timestamp: (i+1) as u64 * self.sample_rate,
                 iops: k.iops,
                 bytes: k.bytes,
             }.stringify())

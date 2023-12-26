@@ -68,7 +68,7 @@ impl <'a>Resource for CPU<'a> {
         for i in 0..num_buckets {
             let k = cycles_map.get(&i, 0).unwrap();
             ret.push(CPUSample{
-                timestamp: (i+1) as u64,
+                timestamp: (i+1) as u64 * self.sample_rate,
                 cycles: k,
             }.stringify())
         }

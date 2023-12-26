@@ -72,7 +72,7 @@ impl <'a>Resource for Mem<'a> {
             }
 
             ret.push(MemSample{
-                timestamp: (i+1) as u64,
+                timestamp: (i+1) as u64 * self.sample_rate,
                 filepages: cur[0],
                 anonpages: cur[1],
                 swapents: cur[2],

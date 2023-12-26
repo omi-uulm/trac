@@ -63,7 +63,7 @@ impl <'a>Resource for Net<'a> {
         for i in 0..num_buckets {
             let k = nettrace_map.get(&i, 0).unwrap();
             ret.push(NetSample{
-                timestamp: (i+1) as u64,
+                timestamp: (i+1) as u64 * self.sample_rate,
                 count: k.count,
                 bytes: k.bytes,
             }.stringify())

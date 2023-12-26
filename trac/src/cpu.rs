@@ -22,11 +22,12 @@ pub struct CPU<'a> {
     start_time: Instant,
     bpf: &'a mut Bpf,
     pid: &'a u64,
+    sample_rate: u64,
 }
 
 impl <'a>CPU<'a> {
-    pub fn new(bpf: &'a mut Bpf, pid: &'a u64) -> Self {
-        CPU { start_time: Instant::now(), bpf, pid }
+    pub fn new(bpf: &'a mut Bpf, pid: &'a u64, sample_rate: u64) -> Self {
+        CPU { start_time: Instant::now(), bpf, pid, sample_rate }
     }
 }
 
@@ -47,7 +48,7 @@ impl <'a>Resource for CPU<'a> {
         match boot_time_get_ns() {
             Ok(boot_time) => {
                 let _ = settings_map.insert(START_TIME_KEY, boot_time, 0);
-                let _ = settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
+                let _ = settings_map.insert(SAMEPLE_RATE_KEY, self.sample_rate, 0);
                 let _ = settings_map.insert(PID_KEY, self.pid, 0);
             },
             Err(_) => {
@@ -60,14 +61,14 @@ impl <'a>Resource for CPU<'a> {
 
     fn to_csv_lines(&mut self) -> Vec<String> {
         let cycles_map: Array<&mut MapData, u64> = Array::try_from(self.bpf.map_mut("TOTAL_CYCLES_MAP").unwrap()).unwrap() as Array<&mut MapData, u64>;
-        let num_buckets = (Instant::now().duration_since(self.start_time).as_millis() / 500) as u32;
+        let num_buckets = (Instant::now().duration_since(self.start_time).as_millis() / self.sample_rate as u128) as u32;
         let mut ret: Vec<String> = Vec::new();
         
         ret.push(String::from("timestamp,cycles"));
         for i in 0..num_buckets {
             let k = cycles_map.get(&i, 0).unwrap();
             ret.push(CPUSample{
-                timestamp: i as u64,
+                timestamp: (i+1) as u64,
                 cycles: k,
             }.stringify())
         }

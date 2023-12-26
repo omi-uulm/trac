@@ -20,6 +20,9 @@ struct Cli {
     #[clap(short, long, global = true, default_value = "0", required = false, help = "Trace duration seconds. A value less or equal to 0 means running forever.")]
     duration: i64,
 
+    #[clap(short, long, global = true, default_value = "500", required = false, help = "Sampling rate in milliseconds. This resolution also applies to the time buckets in the CSV output.")]
+    sample_rate: u64,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -87,10 +90,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut bpf = init();
 
     let mut tracer: Box<dyn Resource> = match &cli.command {
-        Some(Commands::CPU { pid }) => Box::new(cpu::CPU::new(&mut bpf, pid)),
-        Some(Commands::Net { iface }) => Box::new(net::Net::new(&mut bpf, iface)),
-        Some(Commands::Mem { pid }) => Box::new(mem::Mem::new(&mut bpf, pid)),
-        Some(Commands::Dsk { pid}) => Box::new(disk::Disk::new(&mut bpf, pid)),
+        Some(Commands::CPU { pid }) => Box::new(cpu::CPU::new(&mut bpf, pid, cli.sample_rate)),
+        Some(Commands::Net { iface }) => Box::new(net::Net::new(&mut bpf, iface, cli.sample_rate)),
+        Some(Commands::Mem { pid }) => Box::new(mem::Mem::new(&mut bpf, pid, cli.sample_rate)),
+        Some(Commands::Dsk { pid}) => Box::new(disk::Disk::new(&mut bpf, pid, cli.sample_rate)),
         None => {
             return Err(anyhow::Error::msg("subcommand"))
         }

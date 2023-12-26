@@ -25,11 +25,12 @@ pub struct Net<'a> {
     start_time: Instant,
     bpf: &'a mut Bpf,
     iface: &'a String,
+    sample_rate: u64,
 }
 
 impl <'a>Net<'a> {
-    pub fn new(bpf: &'a mut Bpf, iface: &'a String) -> Self {
-        Net { start_time: Instant::now(), bpf, iface }
+    pub fn new(bpf: &'a mut Bpf, iface: &'a String, sample_rate: u64) -> Self {
+        Net { start_time: Instant::now(), bpf, iface, sample_rate }
     }
 }
 
@@ -43,7 +44,7 @@ impl <'a>Resource for Net<'a> {
         match boot_time_get_ns() {
             Ok(boot_time) => {
                 let _ = settings_map.insert(START_TIME_KEY, boot_time, 0);
-                let _ = settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
+                let _ = settings_map.insert(SAMEPLE_RATE_KEY, self.sample_rate, 0);
             },
             Err(_) => {
                 panic!("failed to get boot time nanoseconds");
@@ -55,14 +56,14 @@ impl <'a>Resource for Net<'a> {
 
     fn to_csv_lines(&mut self) -> Vec<String> {
         let nettrace_map = Array::try_from(self.bpf.map_mut("NETTRACE_MAP").unwrap()).unwrap() as Array<&mut MapData, NettraceSample>;
-        let num_buckets = (Instant::now().duration_since(self.start_time).as_millis() / 500) as u32;
+        let num_buckets = (Instant::now().duration_since(self.start_time).as_millis() / self.sample_rate as u128) as u32;
         let mut ret: Vec<String> = Vec::new();
 
         ret.push(String::from("timestamp,count,bytes"));
         for i in 0..num_buckets {
             let k = nettrace_map.get(&i, 0).unwrap();
             ret.push(NetSample{
-                timestamp: i as u64,
+                timestamp: (i+1) as u64,
                 count: k.count,
                 bytes: k.bytes,
             }.stringify())

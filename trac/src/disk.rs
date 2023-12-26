@@ -24,11 +24,12 @@ pub struct Disk<'a> {
     start_time: Instant,
     bpf: &'a mut Bpf,
     pid: &'a u64,
+    sample_rate: u64
 }
 
 impl <'a>Disk<'a> {
-    pub fn new(bpf: &'a mut Bpf, pid: &'a u64) -> Self {
-        Disk { start_time: Instant::now(), bpf, pid }
+    pub fn new(bpf: &'a mut Bpf, pid: &'a u64, sample_rate: u64) -> Self {
+        Disk { start_time: Instant::now(), bpf, pid, sample_rate }
     }
 }
 
@@ -42,7 +43,7 @@ impl <'a>Resource for Disk<'a> {
         match boot_time_get_ns() {
             Ok(boot_time) => {
                 let _ = settings_map.insert(START_TIME_KEY, boot_time, 0);
-                let _ = settings_map.insert(SAMEPLE_RATE_KEY, 500, 0);
+                let _ = settings_map.insert(SAMEPLE_RATE_KEY, self.sample_rate, 0);
                 let _ = settings_map.insert(PID_KEY, self.pid, 0);
             },
             Err(_) => {
@@ -54,14 +55,14 @@ impl <'a>Resource for Disk<'a> {
 
     fn to_csv_lines(&mut self) -> Vec<String> {
         let disk_iops_map = Array::try_from(self.bpf.map_mut("DISK_IOPS_MAP").unwrap()).unwrap() as Array<&mut MapData, DiskIOPSSample>;
-        let num_buckets = (Instant::now().duration_since(self.start_time).as_millis() / 500) as u32;
+        let num_buckets = (Instant::now().duration_since(self.start_time).as_millis() / self.sample_rate as u128) as u32;
         let mut ret: Vec<String> = Vec::new();
         
         ret.push(String::from("timestamp,iops,bytes"));
         for i in 0..num_buckets {
             let k: DiskIOPSSample = disk_iops_map.get(&i, 0).unwrap();
             ret.push(DiskSample{
-                timestamp: i as u64,
+                timestamp: (i+1) as u64,
                 iops: k.iops,
                 bytes: k.bytes,
             }.stringify())

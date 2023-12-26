@@ -73,11 +73,11 @@ impl <'a>Resource for Mem<'a> {
 
             ret.push(MemSample{
                 timestamp: (i+1) as u64 * self.sample_rate,
-                filepages: cur[0],
-                anonpages: cur[1],
-                swapents: cur[2],
-                shmempages: cur[3],
-                total: cur[4],
+                filepages: cur[RSSMember::MM_FILEPAGES as usize],
+                anonpages: cur[RSSMember::MM_ANONPAGES as usize],
+                swapents: cur[RSSMember::MM_SWAPENTS as usize],
+                shmempages: cur[RSSMember::MM_SHMEMPAGES as usize],
+                total: cur[RSSMember::MM_TOTAL as usize],
             }.stringify())
         }
 

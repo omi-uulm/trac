@@ -28,7 +28,7 @@ pack:
         done
     - |
         for tag in ${tags}; do
-          docker build -t ${CI_REGISTRY_IMAGE}${tag}-profiling --file=build/image/Dockerfile .
+          docker build -t ${CI_REGISTRY_IMAGE}${tag}-profiling --file=build/image/Dockerfile.profiling .
           docker push ${CI_REGISTRY_IMAGE}${tag}-profiling
         done
 

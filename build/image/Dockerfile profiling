@@ -1,0 +1,23 @@
+FROM rust:1.74.0-slim-bookworm AS builder
+
+ENV BUILDDIR /build/trac
+
+COPY .cargo ${BUILDDIR}/.cargo
+COPY trac ${BUILDDIR}/trac
+COPY trac-common ${BUILDDIR}/trac-common
+COPY trac-ebpf ${BUILDDIR}/trac-ebpf
+COPY xtask ${BUILDDIR}/xtask
+COPY Cargo.toml ${BUILDDIR}/Cargo.toml
+
+WORKDIR ${BUILDDIR}
+RUN cargo install bpf-linker
+RUN cargo xtask build-ebpf --profiling --release
+RUN cargo build --features trac-profiling-helpers/profiling --release
+
+#####
+
+FROM debian:bookworm-slim
+
+COPY --from=builder /build/trac/target/release/trac /usr/bin/trac
+
+ENTRYPOINT [ "/usr/bin/trac" ]

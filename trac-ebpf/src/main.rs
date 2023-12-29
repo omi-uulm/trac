@@ -17,6 +17,7 @@ use core::{ptr::addr_of_mut, mem::size_of};
 use task::task_struct;
 use perf_event::bpf_perf_event_data as native_bpf_perf_event_data;
 use net::{xdp_md, ethhdr, iphdr, ipv6hdr, tcphdr, udphdr};
+use trac_profiling_macros::{ profiling, profiling_maps_def };
 use trac_common::*;
 
 #[map]
@@ -40,7 +41,10 @@ static DISK_IOPS_MAP: Array<DiskIOPSSample> = Array::with_max_entries(262144, 0)
 #[map]
 static NETTRACE_MAP: Array<NettraceSample> = Array::with_max_entries(262144, 0);
 
+profiling_maps_def!();
+
 #[perf_event]
+#[profiling]
 pub fn observe_cpu_clock(ctx: PerfEventContext) -> u32 {
     match try_observe_cpu_clock(ctx) {
         Ok(ret) => ret,
@@ -123,6 +127,7 @@ fn try_observe_cpu_clock(ctx: PerfEventContext) -> Result<u32, u32> {
 }
 
 #[tracepoint]
+#[profiling]
 pub fn observe_disk(ctx: TracePointContext) -> u32 {
     match try_observe_disk(ctx) {
         Ok(ret) => ret,
@@ -167,6 +172,7 @@ fn try_observe_disk(ctx: TracePointContext) -> Result<u32, u32> {
 }
 
 #[tracepoint]
+#[profiling]
 pub fn observe_memory(ctx: TracePointContext) -> u32 {
     match try_observe_memory(ctx) {
         Ok(ret) => ret,
@@ -294,6 +300,7 @@ fn try_get_payload_size(ctx: XdpContext) -> u32 {
 }
 
 #[xdp]
+#[profiling]
 pub fn observe_iface(ctx: XdpContext) -> u32 {
     match unsafe { try_observe_iface(ctx) } {
         Ok(ret) => ret,

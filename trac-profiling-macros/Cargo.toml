@@ -1,0 +1,18 @@
+[package]
+name = "trac-profiling-macros"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+proc-macro-error = { version = "1.0.4"}
+proc-macro2 = { version = "1.0.70"}
+syn = { version = "2.0.39", features = ["full"] }
+quote = { version = "1.0.33" }
+aya-bpf = { git = "https://github.com/aya-rs/aya" }
+
+[lib]
+path = "src/lib.rs"
+proc_macro = true
+
+[features]
+profiling = []

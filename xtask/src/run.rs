@@ -13,12 +13,16 @@ pub struct Options {
     /// Build and run the release target
     #[clap(long)]
     pub release: bool,
+    /// Build and run the profiling target
+    #[clap(long)]
+    pub profiling: bool,
     /// The command used to wrap your application
     #[clap(short, long, default_value = "sudo -E")]
     pub runner: String,
     /// Arguments to pass to your application
     #[clap(name = "args", last = true)]
     pub run_args: Vec<String>,
+
 }
 
 /// Build the project
@@ -26,6 +30,10 @@ fn build(opts: &Options) -> Result<(), anyhow::Error> {
     let mut args = vec!["build"];
     if opts.release {
         args.push("--release")
+    }
+    if opts.profiling {
+        args.push("--features");
+        args.push("trac-profiling-helpers/profiling");
     }
     let status = Command::new("cargo")
         .args(&args)
@@ -41,6 +49,7 @@ pub fn run(opts: Options) -> Result<(), anyhow::Error> {
     build_ebpf(BuildOptions {
         target: opts.bpf_target,
         release: opts.release,
+        profiling: opts.profiling,
     })
     .context("Error while building eBPF program")?;
     build(&opts).context("Error while building userspace application")?;

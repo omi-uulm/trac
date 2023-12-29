@@ -13,6 +13,7 @@ mod cpu;
 mod disk;
 mod mem;
 mod net;
+use trac_profiling_helpers::print_profiling_csv;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -21,7 +22,7 @@ struct Cli {
     #[clap(short, long, global = true, default_value = "0", required = false, help = "Trace duration seconds. A value less or equal to 0 means running forever.")]
     duration: i64,
 
-    #[clap(short, long, global = true, default_value = "500", required = false, help = "Sampling rate in milliseconds. This resolution also applies to the time buckets in the CSV output.")]
+    #[clap(short, long, global = true, default_value = "1000", required = false, help = "Sampling rate in milliseconds. This resolution also applies to the time buckets in the CSV output.")]
     sample_rate: u64,
 
     #[clap(long, global = true, default_value = "false", required = false, help = "Display progress bar")]
@@ -84,7 +85,6 @@ fn init() -> Bpf {
     if ret != 0 {
         debug!("remove limit on locked memory failed, ret is: {}", ret);
     }
-
     #[cfg(debug_assertions)]
     let bpf = Bpf::load(include_bytes_aligned!(
         "../../target/bpfel-unknown-none/debug/trac"
@@ -120,6 +120,10 @@ async fn main() -> Result<(), anyhow::Error> {
     for line in tracer.to_csv_lines() {
         println!("{line}")
     }
+
+    std::mem::drop(tracer);
+
+    print_profiling_csv(&mut bpf);
 
     Ok(())
 }

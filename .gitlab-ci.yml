@@ -26,4 +26,10 @@ pack:
           docker build -t ${CI_REGISTRY_IMAGE}${tag} --file=build/image/Dockerfile .
           docker push ${CI_REGISTRY_IMAGE}${tag}
         done
+    - |
+        for tag in ${tags}; do
+          docker build -t ${CI_REGISTRY_IMAGE}${tag}-profiling --file=build/image/Dockerfile .
+          docker push ${CI_REGISTRY_IMAGE}${tag}-profiling
+        done
+
 

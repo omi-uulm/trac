@@ -37,6 +37,9 @@ pub struct Options {
     /// Build the release target
     #[clap(long)]
     pub release: bool,
+    /// Buil the profiling target
+    #[clap(long)]
+    pub profiling: bool,
 }
 
 pub fn build_ebpf(opts: Options) -> Result<(), anyhow::Error> {
@@ -50,6 +53,10 @@ pub fn build_ebpf(opts: Options) -> Result<(), anyhow::Error> {
     ];
     if opts.release {
         args.push("--release")
+    }
+    if opts.profiling {
+        args.push("--features");
+        args.push("trac-profiling-macros/profiling");
     }
 
     // Command::new creates a child process which inherits all env variables. This means env

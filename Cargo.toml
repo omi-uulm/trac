@@ -1,3 +1,3 @@
 [workspace]
-members = ["xtask", "trac", "trac-common"]
+members = ["xtask", "trac", "trac-common", "trac-profiling-macros", "trac-profiling-helpers"]
 resolver = "2"

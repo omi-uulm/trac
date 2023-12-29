@@ -1,0 +1,13 @@
+[package]
+name = "trac-profiling-helpers"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aya = { git = "https://github.com/aya-rs/aya" }
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+profiling = []

@@ -6,6 +6,8 @@ COPY .cargo ${BUILDDIR}/.cargo
 COPY trac ${BUILDDIR}/trac
 COPY trac-common ${BUILDDIR}/trac-common
 COPY trac-ebpf ${BUILDDIR}/trac-ebpf
+COPY trac-profiling-helpers ${BUILDDIR}/trac-profiling-helpers
+COPY trac-profiling-macros ${BUILDDIR}/trac-profiling-macros
 COPY xtask ${BUILDDIR}/xtask
 COPY Cargo.toml ${BUILDDIR}/Cargo.toml
 

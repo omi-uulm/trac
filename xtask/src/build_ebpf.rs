@@ -43,32 +43,34 @@ pub struct Options {
 }
 
 pub fn build_ebpf(opts: Options) -> Result<(), anyhow::Error> {
-    let dir = PathBuf::from("trac-ebpf");
-    let target = format!("--target={}", opts.target);
-    let mut args = vec![
-        "build",
-        target.as_str(),
-        "-Z",
-        "build-std=core",
-    ];
-    if opts.release {
-        args.push("--release")
+    for res in vec!["cpu", "mem", "disk", "net"] {
+        let dir = PathBuf::from(format!("trac-ebpf-{}", res));
+        let target = format!("--target={}", opts.target);
+        let mut args = vec![
+            "build",
+            target.as_str(),
+            "-Z",
+            "build-std=core",
+        ];
+        if opts.release {
+            args.push("--release")
+        }
+        if opts.profiling {
+            args.push("--features");
+            args.push("trac-profiling-macros/profiling");
+        }
+    
+        // Command::new creates a child process which inherits all env variables. This means env
+        // vars set by the cargo xtask command are also inherited. RUSTUP_TOOLCHAIN is removed
+        // so the rust-toolchain.toml file in the -ebpf folder is honored.
+    
+        let status = Command::new("cargo")
+            .current_dir(dir)
+            .env_remove("RUSTUP_TOOLCHAIN")
+            .args(&args)
+            .status()
+            .expect("failed to build bpf program");
+        assert!(status.success());
     }
-    if opts.profiling {
-        args.push("--features");
-        args.push("trac-profiling-macros/profiling");
-    }
-
-    // Command::new creates a child process which inherits all env variables. This means env
-    // vars set by the cargo xtask command are also inherited. RUSTUP_TOOLCHAIN is removed
-    // so the rust-toolchain.toml file in the -ebpf folder is honored.
-
-    let status = Command::new("cargo")
-        .current_dir(dir)
-        .env_remove("RUSTUP_TOOLCHAIN")
-        .args(&args)
-        .status()
-        .expect("failed to build bpf program");
-    assert!(status.success());
     Ok(())
 }

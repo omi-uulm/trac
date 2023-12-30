@@ -4,7 +4,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use log::{ debug, info };
 use tokio::signal;
 use typedefs::Resource;
-use std::{ thread::sleep, time::Duration };
+use std::{ thread::sleep, time::Duration, collections::HashMap };
 use clap::{ Parser, Subcommand };
 
 mod helpers;
@@ -74,7 +74,7 @@ enum Commands {
     },
 }
 
-fn init() -> Bpf {
+fn init() ->  HashMap<&'static str, &'static [u8]> {
     env_logger::init();
 
     let rlim = libc::rlimit {
@@ -85,31 +85,49 @@ fn init() -> Bpf {
     if ret != 0 {
         debug!("remove limit on locked memory failed, ret is: {}", ret);
     }
-    #[cfg(debug_assertions)]
-    let bpf = Bpf::load(include_bytes_aligned!(
-        "../../target/bpfel-unknown-none/debug/trac"
-    )).unwrap();
+
+    let mut bpf_objects: HashMap<&str, &[u8]> = HashMap::new();
+
+    #[cfg(debug_assertions)] {
+        bpf_objects.insert("cpu", include_bytes_aligned!("../../target/bpfel-unknown-none/debug/trac-cpu"));
+        bpf_objects.insert("mem", include_bytes_aligned!("../../target/bpfel-unknown-none/debug/trac-mem"));
+        bpf_objects.insert("disk", include_bytes_aligned!("../../target/bpfel-unknown-none/debug/trac-disk"));
+        bpf_objects.insert("net", include_bytes_aligned!("../../target/bpfel-unknown-none/debug/trac-net"));
+    }
     #[cfg(not(debug_assertions))]
-    let bpf = Bpf::load(include_bytes_aligned!(
-        "../../target/bpfel-unknown-none/release/trac"
-    )).unwrap();
-    // if let Err(e) = BpfLogger::init(&mut bpf) {
-    //     // This can happen if you remove all log statements from your eBPF program.
-    //     warn!("failed to initialize eBPF logger: {}", e);
-    // }
-    return bpf
+    {
+        bpf_objects.insert("cpu", include_bytes_aligned!("../../target/bpfel-unknown-none/release/trac-cpu"));
+        bpf_objects.insert("mem", include_bytes_aligned!("../../target/bpfel-unknown-none/release/trac-mem"));
+        bpf_objects.insert("disk", include_bytes_aligned!("../../target/bpfel-unknown-none/release/trac-disk"));
+        bpf_objects.insert("net", include_bytes_aligned!("../../target/bpfel-unknown-none/release/trac-net"));
+    }
+
+    bpf_objects
 }
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let cli = Cli::parse();
-    let mut bpf = init();
+    let bpf_objects = init();
+    let mut bpf: Bpf;
 
     let mut tracer: Box<dyn Resource> = match &cli.command {
-        Some(Commands::CPU { pid }) => Box::new(cpu::CPU::new(&mut bpf, pid, cli.sample_rate)),
-        Some(Commands::Net { iface }) => Box::new(net::Net::new(&mut bpf, iface, cli.sample_rate)),
-        Some(Commands::Mem { pid }) => Box::new(mem::Mem::new(&mut bpf, pid, cli.sample_rate)),
-        Some(Commands::Dsk { pid}) => Box::new(disk::Disk::new(&mut bpf, pid, cli.sample_rate)),
+        Some(Commands::CPU { pid }) => {
+            bpf = Bpf::load(bpf_objects.get("cpu").unwrap()).unwrap();
+            Box::new(cpu::CPU::new(&mut bpf, pid, cli.sample_rate))
+        },
+        Some(Commands::Net { iface }) => {
+            bpf = Bpf::load(bpf_objects.get("net").unwrap()).unwrap();
+            Box::new(net::Net::new(&mut bpf, iface, cli.sample_rate))
+        },
+        Some(Commands::Mem { pid }) => {
+            bpf = Bpf::load(bpf_objects.get("mem").unwrap()).unwrap();
+            Box::new(mem::Mem::new(&mut bpf, pid, cli.sample_rate))
+        },
+        Some(Commands::Dsk { pid}) => {
+            bpf = Bpf::load(bpf_objects.get("disk").unwrap()).unwrap();
+            Box::new(disk::Disk::new(&mut bpf, pid, cli.sample_rate))
+        },
         None => {
             return Err(anyhow::Error::msg("subcommand"))
         }

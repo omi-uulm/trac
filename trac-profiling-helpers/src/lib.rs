@@ -1,6 +1,6 @@
-use std::println;
+#![allow(unused_variables)]
 
-use aya::{Bpf, maps::{MapData, Array}};
+use aya::Bpf;
 
 
 #[cfg(feature = "profiling")]
@@ -16,11 +16,11 @@ unsafe impl aya::Pod for ProfilingEntry{ }
 
 #[cfg(feature = "profiling")]
 pub fn print_profiling_csv(bpf: &mut Bpf) {
-    let state_map: Array<&mut MapData, u64> = Array::try_from(bpf.map_mut("BPF_PROFILING_STATE_MAP").unwrap()).unwrap().into();
+    let state_map: aya::maps::Array<&mut aya::maps::MapData, u64> = aya::maps::Array::try_from(bpf.map_mut("BPF_PROFILING_STATE_MAP").unwrap()).unwrap().into();
     let key: u32 = 1;
     let num_buckets: u32 = state_map.get(&key, 0).unwrap() as u32;
     
-    let data_map: Array<&mut MapData, ProfilingEntry> = Array::try_from(bpf.map_mut("BPF_PROFILING_MAP").unwrap()).unwrap().into();
+    let data_map: aya::maps::Array<&mut aya::maps::MapData, ProfilingEntry> = aya::maps::Array::try_from(bpf.map_mut("BPF_PROFILING_MAP").unwrap()).unwrap().into();
 
     println!("timestamp,ebpf_nanos,ebpf_with_profiling_nanos,count");
     for i in 0..num_buckets {

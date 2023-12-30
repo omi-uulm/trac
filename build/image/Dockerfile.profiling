@@ -6,6 +6,10 @@ COPY .cargo ${BUILDDIR}/.cargo
 COPY trac ${BUILDDIR}/trac
 COPY trac-common ${BUILDDIR}/trac-common
 COPY trac-ebpf ${BUILDDIR}/trac-ebpf
+COPY trac-ebpf-cpu ${BUILDDIR}/trac-ebpf-cpu
+COPY trac-ebpf-mem ${BUILDDIR}/trac-ebpf-mem
+COPY trac-ebpf-disk ${BUILDDIR}/trac-ebpf-disk
+COPY trac-ebpf-net ${BUILDDIR}/trac-ebpf-net
 COPY trac-profiling-helpers ${BUILDDIR}/trac-profiling-helpers
 COPY trac-profiling-macros ${BUILDDIR}/trac-profiling-macros
 COPY xtask ${BUILDDIR}/xtask

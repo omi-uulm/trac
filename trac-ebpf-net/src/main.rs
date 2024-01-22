@@ -93,7 +93,7 @@ fn try_get_payload_size(ctx: XdpContext) -> u32 {
 pub fn observe_iface(ctx: XdpContext) -> u32 {
     match unsafe { try_observe_iface(ctx) } {
         Ok(ret) => ret,
-        Err(_) => XDP_ABORTED,
+        Err(ret) => ret,
     }
 }
 

@@ -8,14 +8,13 @@ use trac_common::*;
 use crate::helpers::boot_time_get_ns;
 use crate::typedefs::Resource;
 
-
 struct MemSample {
     timestamp: u64,
-    filepages: i64,
-    anonpages: i64,
-    swapents: i64,
-    shmempages: i64,
-    total: i64,
+    filepages: u64,
+    anonpages: u64,
+    swapents: u64,
+    shmempages: u64,
+    total: u64,
 }
 
 impl MemSample {
@@ -59,25 +58,28 @@ impl <'a>Resource for Mem<'a> {
     }
 
     fn to_csv_lines(&mut self) -> Vec<String> {
-        let rss_stat_map = Array::try_from(self.bpf.map_mut("RSS_STAT_MAP").unwrap()).unwrap() as Array<&mut MapData, [i64;5]>;
-        let mut cur: [i64; 5] = [0,0,0,0,0];
+        let rss_stat_map = Array::try_from(self.bpf.map_mut("RSS_STAT_MAP").unwrap()).unwrap() as Array<&mut MapData, RSSStat>;
+        let mut cur: [u64; 5] = [0,0,0,0,0];
         let num_buckets = (Instant::now().duration_since(self.start_time).as_millis() / self.sample_rate as u128) as u32;
         let mut ret: Vec<String> = Vec::new();
         
+
         ret.push(String::from("timestamp,filepages,anonpages,swapents,shmempages,total"));
         for i in 0..num_buckets {
-            let val = rss_stat_map.get(&i, 0).unwrap();
+            let val: RSSStat = rss_stat_map.get(&i, 0).unwrap();
             for (i, k) in val.iter().enumerate() {
-                cur[i] += k;
+                if k.touched == 0xDEADBEEF {
+                    cur[i] = k.bytes;
+                }
             }
 
             ret.push(MemSample{
                 timestamp: (i+1) as u64 * self.sample_rate,
-                filepages: cur[RSSMember::MM_FILEPAGES as usize],
-                anonpages: cur[RSSMember::MM_ANONPAGES as usize],
-                swapents: cur[RSSMember::MM_SWAPENTS as usize],
-                shmempages: cur[RSSMember::MM_SHMEMPAGES as usize],
-                total: cur[RSSMember::MM_TOTAL as usize],
+                filepages: cur[RSSMemberEnum::MM_FILEPAGES as usize],
+                anonpages: cur[RSSMemberEnum::MM_ANONPAGES as usize],
+                swapents: cur[RSSMemberEnum::MM_SWAPENTS as usize],
+                shmempages: cur[RSSMemberEnum::MM_SHMEMPAGES as usize],
+                total: cur.iter().sum(),
             }.stringify())
         }
 

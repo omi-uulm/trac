@@ -1,4 +1,4 @@
-use aya::{ include_bytes_aligned, Bpf };
+use aya::{ include_bytes_aligned, Bpf, BpfLoader };
 use indicatif::{ProgressBar, ProgressStyle};
 // use aya_log::BpfLogger;
 use log::{ debug, info };
@@ -113,19 +113,19 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let mut tracer: Box<dyn Resource> = match &cli.command {
         Some(Commands::CPU { pid }) => {
-            bpf = Bpf::load(bpf_objects.get("cpu").unwrap()).unwrap();
+            bpf = BpfLoader::new().load(bpf_objects.get("cpu").unwrap()).unwrap();
             Box::new(cpu::CPU::new(&mut bpf, pid, cli.sample_rate))
         },
         Some(Commands::Net { iface }) => {
-            bpf = Bpf::load(bpf_objects.get("net").unwrap()).unwrap();
+            bpf = BpfLoader::new().load(bpf_objects.get("net").unwrap()).unwrap();
             Box::new(net::Net::new(&mut bpf, iface, cli.sample_rate))
         },
         Some(Commands::Mem { pid }) => {
-            bpf = Bpf::load(bpf_objects.get("mem").unwrap()).unwrap();
+            bpf = BpfLoader::new().load(bpf_objects.get("mem").unwrap()).unwrap();
             Box::new(mem::Mem::new(&mut bpf, pid, cli.sample_rate))
         },
         Some(Commands::Dsk { pid}) => {
-            bpf = Bpf::load(bpf_objects.get("disk").unwrap()).unwrap();
+            bpf = BpfLoader::new().load(bpf_objects.get("disk").unwrap()).unwrap();
             Box::new(disk::Disk::new(&mut bpf, pid, cli.sample_rate))
         },
         None => {

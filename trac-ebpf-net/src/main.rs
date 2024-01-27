@@ -5,7 +5,7 @@ mod net;
 
 use aya_bpf::{
     macros::{ map, xdp },
-    bindings::xdp_action::{XDP_PASS, XDP_ABORTED},
+    bindings::xdp_action::XDP_PASS,
     programs::XdpContext,
     BpfContext,
     maps::Array,

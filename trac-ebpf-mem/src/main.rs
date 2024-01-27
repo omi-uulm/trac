@@ -66,12 +66,12 @@ fn try_observe_memory(ctx: TracePointContext) -> Result<u32, u32> {
                         match RSS_STAT_MAP.get_ptr_mut(current_bucket) {
                             None => {}
                             Some(stat) => {
-                                unsafe { (*stat)[mtype] += size as i64 - (*state).previous[mtype] as i64 };
-                                unsafe { (*stat)[RSSMember::MM_TOTAL as usize] += size as i64 - (*state).previous[mtype] as i64 };
+                                unsafe { (*stat)[mtype] += size - (*state).previous[mtype] as i64 };
+                                unsafe { (*stat)[RSSMember::MM_TOTAL as usize] += size - (*state).previous[mtype] as i64 };
                             }
                         }
 
-                        unsafe { (*state).previous[mtype] = size as u64 };
+                        unsafe { (*state).previous[mtype] = size };
                     }
                 }
                 break;

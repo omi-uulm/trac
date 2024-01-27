@@ -54,7 +54,7 @@ pub struct block_block_io_start_args {
 }
 
 pub struct RSSStatSample {
-    pub previous: [u64; 4],
+    pub previous: [i64; 4],
 }
 
 pub static START_TIME_KEY: u64 = 0;

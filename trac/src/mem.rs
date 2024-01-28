@@ -67,7 +67,7 @@ impl <'a>Resource for Mem<'a> {
         ret.push(String::from("timestamp,filepages,anonpages,swapents,shmempages,total"));
         for i in 0..num_buckets {
             let val = rss_stat_map.get(&i, 0).unwrap();
-            for (_, cur_index) in val.iter().enumerate() {
+            for (cur_index, k) in val.iter().enumerate() {
                 cur[cur_index] += k;
             }
 

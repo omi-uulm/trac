@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use aya::util::nr_cpus;
 use aya::Bpf;
-use aya::maps::{ Array, HashMap, MapData, PerCpuArray};
+use aya::maps::{ HashMap, MapData, PerCpuArray};
 use aya::programs::TracePoint;
 use trac_common::*;
 

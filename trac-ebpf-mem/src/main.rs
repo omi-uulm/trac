@@ -22,7 +22,7 @@ use trac_ebpf::bpf_defaults;
 static RSS_LAST_STATE_MAP: HashMap<i32, RSSStatSample> = HashMap::with_max_entries(10000, 0);
 
 #[map]
-static RSS_LAST_SHMEM_MAP: HashMap<u32, SHMEM_STAT> = HashMap::with_max_entries(10000, 0);
+static RSS_LAST_SHMEM_MAP: HashMap<u64, SHMEM_STAT> = HashMap::with_max_entries(10000, 0);
 
 #[map]
 static RSS_STAT_MAP: PerCpuArray<[i64; 4]> = PerCpuArray::with_max_entries(262144, 0);
@@ -45,7 +45,7 @@ fn try_observe_memory(ctx: TracePointContext) -> Result<u32, u32> {
     let pid = unsafe { (*task).pid };
     let readable_ctx: *mut kmem_rss_stat_args = ctx.as_ptr() as *mut kmem_rss_stat_args;
     let mtype = unsafe { (*readable_ctx).member } as usize;
-    let mm_id = unsafe { (*readable_ctx).mm_id } as u32;
+    let mm_id = unsafe { (*(*task).mm).__bindgen_anon_1.mmap_base } as u64;
     let size = unsafe { (*readable_ctx).size };
     let current_bucket = get_current_bucket();
     

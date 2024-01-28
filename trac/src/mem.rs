@@ -88,7 +88,7 @@ impl <'a>Resource for Mem<'a> {
             
         }
 
-        let rss_last_shmem_map = HashMap::try_from(self.bpf.map_mut("RSS_LAST_SHMEM_MAP").unwrap()).unwrap() as HashMap<&mut MapData, u32, SHMEM_STAT>;
+        let rss_last_shmem_map = HashMap::try_from(self.bpf.map_mut("RSS_LAST_SHMEM_MAP").unwrap()).unwrap() as HashMap<&mut MapData, u64, SHMEM_STAT>;
         for k in rss_last_shmem_map.keys() {
             let key = k.unwrap();
             let value = rss_last_shmem_map.get(&key, 0).unwrap();

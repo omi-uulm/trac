@@ -8,7 +8,7 @@ use aya_bpf::{
     macros::{ tracepoint, map },
     programs::TracePointContext,
     BpfContext,
-    maps::{ Array, HashMap },
+    maps::{ Array, PerCpuHashMap },
 };
 use task::task_struct;
 use trac_profiling_macros::{ profiling, profiling_maps_def };
@@ -16,7 +16,7 @@ use trac_common::*;
 use trac_ebpf::bpf_defaults;
 
 #[map]
-static RSS_LAST_STATE_MAP: HashMap<i32, RSSStatSample> = HashMap::with_max_entries(100, 0);
+static RSS_LAST_STATE_MAP: PerCpuHashMap<i32, RSSStatSample> = PerCpuHashMap::with_max_entries(100, 0);
 
 #[map]
 static RSS_STAT_MAP: Array<[i64; 4]> = Array::with_max_entries(262144, 0);

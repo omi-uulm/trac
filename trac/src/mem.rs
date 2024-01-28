@@ -1,7 +1,8 @@
 use std::time::Instant;
 
+use aya::util::nr_cpus;
 use aya::Bpf;
-use aya::maps::{ HashMap, MapData, Array};
+use aya::maps::{ Array, HashMap, MapData, PerCpuArray};
 use aya::programs::TracePoint;
 use trac_common::*;
 
@@ -11,6 +12,7 @@ use crate::typedefs::Resource;
 
 struct MemSample {
     timestamp: u64,
+    core: usize,
     filepages: i64,
     anonpages: i64,
     swapents: i64,
@@ -20,7 +22,7 @@ struct MemSample {
 
 impl MemSample {
     pub fn stringify(&self) -> String {
-        format!("{},{},{},{},{},{}", self.timestamp, self.filepages, self.anonpages, self.swapents, self.shmempages, self.total)
+        format!("{},{},{},{},{},{},{}", self.timestamp, self.core, self.filepages, self.anonpages, self.swapents, self.shmempages, self.total)
     }
 }
 
@@ -59,26 +61,30 @@ impl <'a>Resource for Mem<'a> {
     }
 
     fn to_csv_lines(&mut self) -> Vec<String> {
-        let rss_stat_map = Array::try_from(self.bpf.map_mut("RSS_STAT_MAP").unwrap()).unwrap() as Array<&mut MapData, [i64; 4]>;
-        let mut cur: [i64; 4] = [0,0,0,0];
+        let rss_stat_map = PerCpuArray::try_from(self.bpf.map_mut("RSS_STAT_MAP").unwrap()).unwrap() as PerCpuArray<&mut MapData, [i64; 4]>;
+        let num_cores = nr_cpus().unwrap();
+        let mut cur = vec![[0,0,0,0]; num_cores];
         let num_buckets = (Instant::now().duration_since(self.start_time).as_millis() / self.sample_rate as u128) as u32;
         let mut ret: Vec<String> = Vec::new();
         
-        ret.push(String::from("timestamp,filepages,anonpages,swapents,shmempages,total"));
+        ret.push(String::from("timestamp,core,filepages,anonpages,swapents,shmempages,total"));
         for i in 0..num_buckets {
             let val = rss_stat_map.get(&i, 0).unwrap();
-            for (cur_index, k) in val.iter().enumerate() {
-                cur[cur_index] += k;
+            for (core, core_val) in val.iter().enumerate() {
+                for (cur_index, k) in core_val.iter().enumerate() {
+                    cur[core][cur_index] += k;
+                }
+                ret.push(MemSample{
+                    timestamp: (i+1) as u64 * self.sample_rate,
+                    core: core,
+                    filepages: cur[core][RSSMember::MM_FILEPAGES as usize],
+                    anonpages: cur[core][RSSMember::MM_ANONPAGES as usize],
+                    swapents: cur[core][RSSMember::MM_SWAPENTS as usize],
+                    shmempages: cur[core][RSSMember::MM_SHMEMPAGES as usize],
+                    total: cur[core][0] + cur[core][1] + cur[core][2] + cur[core][3],
+                }.stringify())
             }
-
-            ret.push(MemSample{
-                timestamp: (i+1) as u64 * self.sample_rate,
-                filepages: cur[RSSMember::MM_FILEPAGES as usize],
-                anonpages: cur[RSSMember::MM_ANONPAGES as usize],
-                swapents: cur[RSSMember::MM_SWAPENTS as usize],
-                shmempages: cur[RSSMember::MM_SHMEMPAGES as usize],
-                total: cur[0] + cur[1] + cur[2] + cur[3],
-            }.stringify())
+            
         }
 
         ret

@@ -2,7 +2,7 @@
 
 #![allow(non_camel_case_types)]
 
-pub enum RSSMemberEnum {
+pub enum RSSMember {
     MM_FILEPAGES,	/* Resident file mapping pages */
 	MM_ANONPAGES,	/* Resident anonymous pages */
 	MM_SWAPENTS,	/* Anonymous swap entries */
@@ -52,16 +52,9 @@ pub struct block_block_io_start_args {
     pub cmd: [char; 4],
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct RSSMemberStat {
-    pub bytes: u64,
-    pub touched: u64,
+pub struct RSSStatSample {
+    pub previous: [u64; 4],
 }
-#[cfg(feature = "user")]
-unsafe impl aya::Pod for RSSMemberStat{ }
-
-pub type RSSStat = [RSSMemberStat; 4];
-
 
 pub static START_TIME_KEY: u64 = 0;
 pub static SAMEPLE_RATE_KEY: u64 = 1;

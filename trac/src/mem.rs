@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use aya::Bpf;
-use aya::maps::{ HashMap, MapData, PerCpuArray};
+use aya::maps::{ HashMap, MapData, Array};
 use aya::programs::TracePoint;
 use trac_common::*;
 
@@ -59,7 +59,7 @@ impl <'a>Resource for Mem<'a> {
     }
 
     fn to_csv_lines(&mut self) -> Vec<String> {
-        let rss_stat_map = PerCpuArray::try_from(self.bpf.map_mut("RSS_STAT_MAP").unwrap()).unwrap() as PerCpuArray<&mut MapData, [i64; 4]>;
+        let rss_stat_map = Array::try_from(self.bpf.map_mut("RSS_STAT_MAP").unwrap()).unwrap() as Array<&mut MapData, [i64; 4]>;
         let mut cur: [i64; 4] = [0,0,0,0];
         let num_buckets = (Instant::now().duration_since(self.start_time).as_millis() / self.sample_rate as u128) as u32;
         let mut ret: Vec<String> = Vec::new();
@@ -67,10 +67,8 @@ impl <'a>Resource for Mem<'a> {
         ret.push(String::from("timestamp,filepages,anonpages,swapents,shmempages,total"));
         for i in 0..num_buckets {
             let val = rss_stat_map.get(&i, 0).unwrap();
-            for (_, cpu_val) in val.iter().enumerate() {
-                for (cur_index, k) in cpu_val.iter().enumerate() {
-                    cur[cur_index] += k;
-                }
+            for (_, cur_index) in val.iter().enumerate() {
+                cur[cur_index] += k;
             }
 
             ret.push(MemSample{

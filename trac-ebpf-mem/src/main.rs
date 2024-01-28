@@ -45,7 +45,7 @@ fn try_observe_memory(ctx: TracePointContext) -> Result<u32, u32> {
     let pid = unsafe { (*task).pid };
     let readable_ctx: *mut kmem_rss_stat_args = ctx.as_ptr() as *mut kmem_rss_stat_args;
     let mtype = unsafe { (*readable_ctx).member } as usize;
-    let mm_id = unsafe { (*(*task).mm).__bindgen_anon_1.mmap_base } as u64;
+    let mm_id = unsafe { (*(*task).active_mm).__bindgen_anon_1.mmap_base } as u64;
     let size = unsafe { (*readable_ctx).size };
     let current_bucket = get_current_bucket();
     

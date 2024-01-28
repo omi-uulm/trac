@@ -65,3 +65,12 @@ pub static ETH_P_IP: u16 = (0x0800 as u16).to_be();
 pub static ETH_P_IPV6: u16 = (0x86DD as u16).to_be();
 pub static IPPROTO_TCP: u32 = 6;
 pub static IPPROTO_UDP: u32 = 17;
+
+
+#[derive(Debug, Copy, Clone)]
+pub struct SHMEM_STAT {
+    pub bytes: u64,
+    pub counter: u64,
+}
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for SHMEM_STAT{ }

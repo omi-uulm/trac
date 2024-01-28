@@ -17,11 +17,12 @@ use trac_profiling_macros::{ profiling, profiling_maps_def };
 use trac_common::*;
 use trac_ebpf::bpf_defaults;
 
+
 #[map]
 static RSS_LAST_STATE_MAP: HashMap<i32, RSSStatSample> = HashMap::with_max_entries(10000, 0);
 
 #[map]
-static RSS_LAST_SHMEM_MAP: HashMap<u32, u64> = HashMap::with_max_entries(10000, 0);
+static RSS_LAST_SHMEM_MAP: HashMap<u32, SHMEM_STAT> = HashMap::with_max_entries(10000, 0);
 
 #[map]
 static RSS_STAT_MAP: PerCpuArray<[i64; 4]> = PerCpuArray::with_max_entries(262144, 0);
@@ -66,18 +67,21 @@ fn try_observe_memory(ctx: TracePointContext) -> Result<u32, u32> {
                 if mtype == RSSMember::MM_SHMEMPAGES as usize {
                     match RSS_LAST_SHMEM_MAP.get_ptr_mut(&mm_id) {
                         None => {
-                            let value = size as u64;
+                            let value = SHMEM_STAT{ bytes: size as u64, counter: 1 };
                             _ = RSS_LAST_SHMEM_MAP.insert(&mm_id, &value, 0);
                         }
                         Some(state) => {
-                            let diff = size - unsafe { *state } as i64;
+                            let diff = size - unsafe { (*state).bytes } as i64;
                             match RSS_STAT_MAP.get_ptr_mut(current_bucket) {
                                 None => {}
                                 Some(stat) => {
                                     unsafe { (*stat)[mtype] += diff; }
                                 }
                             }
-                            unsafe { *state = size as u64 };
+                            unsafe { 
+                                (*state).bytes = size as u64;
+                                (*state).counter += 1;
+                            };
                         }
                     }
                 } else {

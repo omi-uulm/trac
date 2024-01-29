@@ -4,7 +4,6 @@ use aya::util::nr_cpus;
 use aya::Bpf;
 use aya::maps::{ HashMap, MapData, PerCpuArray};
 use aya::programs::TracePoint;
-use log::error;
 use trac_common::*;
 
 use crate::helpers::boot_time_get_ns;
@@ -86,13 +85,6 @@ impl <'a>Resource for Mem<'a> {
                 }.stringify())
             }
             
-        }
-
-        let rss_last_shmem_map = HashMap::try_from(self.bpf.map_mut("RSS_LAST_SHMEM_MAP").unwrap()).unwrap() as HashMap<&mut MapData, u64, SHMEM_STAT>;
-        for k in rss_last_shmem_map.keys() {
-            let key = k.unwrap();
-            let value = rss_last_shmem_map.get(&key, 0).unwrap();
-            error!("{}, {}", key, value.counter);
         }
 
         ret

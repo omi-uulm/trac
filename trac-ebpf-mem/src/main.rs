@@ -22,9 +22,6 @@ use trac_ebpf::bpf_defaults;
 static RSS_LAST_STATE_MAP: HashMap<i32, RSSStatSample> = HashMap::with_max_entries(10000, 0);
 
 #[map]
-static RSS_LAST_SHMEM_MAP: HashMap<u64, SHMEM_STAT> = HashMap::with_max_entries(10000, 0);
-
-#[map]
 static RSS_STAT_MAP: PerCpuArray<[i64; 4]> = PerCpuArray::with_max_entries(262144, 0);
 
 profiling_maps_def!();
@@ -45,7 +42,6 @@ fn try_observe_memory(ctx: TracePointContext) -> Result<u32, u32> {
     let pid = unsafe { (*task).pid };
     let readable_ctx: *mut kmem_rss_stat_args = ctx.as_ptr() as *mut kmem_rss_stat_args;
     let mtype = unsafe { (*readable_ctx).member } as usize;
-    let mm_id = unsafe { (*(*task).active_mm).__bindgen_anon_1.mmap_base } as u64;
     let size = unsafe { (*readable_ctx).size };
     let current_bucket = get_current_bucket();
     
@@ -64,44 +60,22 @@ fn try_observe_memory(ctx: TracePointContext) -> Result<u32, u32> {
             0 => break,
             1 => break,
             w if w == watch_pid => {
-                if mtype == RSSMember::MM_SHMEMPAGES as usize {
-                    match RSS_LAST_SHMEM_MAP.get_ptr_mut(&mm_id) {
-                        None => {
-                            let value = SHMEM_STAT{ bytes: size as u64, counter: 1 };
-                            _ = RSS_LAST_SHMEM_MAP.insert(&mm_id, &value, 0);
-                        }
-                        Some(state) => {
-                            let diff = size - unsafe { (*state).bytes } as i64;
-                            match RSS_STAT_MAP.get_ptr_mut(current_bucket) {
-                                None => {}
-                                Some(stat) => {
-                                    unsafe { (*stat)[mtype] += diff; }
-                                }
-                            }
-                            unsafe { 
-                                (*state).bytes = size as u64;
-                                (*state).counter += 1;
-                            };
-                        }
+                match RSS_LAST_STATE_MAP.get_ptr_mut(&pid) {
+                    None => {
+                        let mut value = RSSStatSample{ previous: [0,0,0,0] };
+                        value.previous[mtype] = size as u64;
+                        _ = RSS_LAST_STATE_MAP.insert(&pid, &value, 0);
                     }
-                } else {
-                    match RSS_LAST_STATE_MAP.get_ptr_mut(&pid) {
-                        None => {
-                            let mut value = RSSStatSample{ previous: [0,0,0,0] };
-                            value.previous[mtype] = size as u64;
-                            _ = RSS_LAST_STATE_MAP.insert(&pid, &value, 0);
-                        }
-                        Some(state) => {
-                            let diff = size - unsafe { (*state).previous[mtype] } as i64;
-                            
-                            match RSS_STAT_MAP.get_ptr_mut(current_bucket) {
-                                None => {}
-                                Some(stat) => {
-                                    unsafe { (*stat)[mtype] += diff; }
-                                }
+                    Some(state) => {
+                        let diff = size - unsafe { (*state).previous[mtype] } as i64;
+                        
+                        match RSS_STAT_MAP.get_ptr_mut(current_bucket) {
+                            None => {}
+                            Some(stat) => {
+                                unsafe { (*stat)[mtype] += diff; }
                             }
-                            unsafe { (*state).previous[mtype] = size as u64 };
                         }
+                        unsafe { (*state).previous[mtype] = size as u64 };
                     }
                 }
 

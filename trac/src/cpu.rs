@@ -40,7 +40,7 @@ impl <'a>Resource for CPU<'a> {
                 PerfTypeId::Hardware,
                 perf_hw_id::PERF_COUNT_HW_CPU_CYCLES as u64,
                 PerfEventScope::AllProcessesOneCpu { cpu },
-                SamplePolicy::Frequency(1000),
+                SamplePolicy::Period(1000000),
             ).unwrap();
         }
 
@@ -69,7 +69,7 @@ impl <'a>Resource for CPU<'a> {
             let k = cycles_map.get(&i, 0).unwrap();
             ret.push(CPUSample{
                 timestamp: (i+1) as u64 * self.sample_rate,
-                cycles: k,
+                cycles: k * 1000000,
             }.stringify())
         }
 
